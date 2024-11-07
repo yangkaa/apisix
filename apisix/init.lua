@@ -623,18 +623,23 @@ function _M.http_access_phase()
     -- the original request_uri can be accessed via var.real_request_uri
     api_ctx.var.real_request_uri = api_ctx.var.request_uri
     api_ctx.var.request_uri = api_ctx.var.uri .. api_ctx.var.is_args .. (api_ctx.var.args or "")
-
+    core.log.error("################## start ############################")
+    core.log.error("request_uri: ", api_ctx.var.request_uri)
+    core.log.error("real_request_uri: ", api_ctx.var.real_request_uri)
     router.router_http.match(api_ctx)
 
+
     local route = api_ctx.matched_route
+    core.log.error("matched route: ", core.json.delay_encode(route, true), "apictx.var: ", core.json.delay_encode(api_ctx.var, true))
     if not route then
         -- run global rule when there is no matching route
         local global_rules = apisix_global_rules.global_rules()
+        core.log.error("global rules: ", core.json.delay_encode(global_rules, true))
         plugin.run_global_rules(api_ctx, global_rules, nil)
-
-        core.log.info("not find any matched route")
+        core.log.error("api_ctx after global rules: ", core.json.delay_encode(api_ctx, true))
+        core.log.error("------------------------- end ------------------------------------")
         return core.response.exit(404,
-                    {error_msg = "404 Route Not Found"})
+                    {error_msg = "404 [Route Not Found]"})
     end
 
     core.log.info("matched route: ",
