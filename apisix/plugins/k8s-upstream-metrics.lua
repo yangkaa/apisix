@@ -1,7 +1,7 @@
 local core     = require("apisix.core")
+local exporter = require("apisix.plugins.prometheus.exporter")
 local ngx = ngx
 local pairs = pairs
-local prometheus
 
 local plugin_name = "k8s-upstream-metrics"
 
@@ -25,31 +25,36 @@ local _M = {
 }
 
 -- 声明指标
-local metrics = {}
+local metrics = {
+    traffic_bytes = nil,
+    request_seconds = nil
+}
 
 -- 初始化prometheus指标
-function _M.init()
-    -- 延迟加载prometheus模块
-    prometheus = require("apisix.plugins.prometheus")
-    if not prometheus then
-        core.log.error("prometheus not found")
-        return
+local function init_metrics()
+    if metrics.traffic_bytes == nil then
+        metrics.traffic_bytes = exporter.metric({
+            type = "counter",
+            name = "apisix_service_traffic_bytes_total",
+            help = "Total bytes of service traffic",
+            labels = {"namespace", "service", "service_id", "status", "type"}
+        })
     end
 
-    -- 初始化指标
-    metrics = {
-        traffic_bytes = prometheus:counter(
-            "apisix_service_traffic_bytes_total",
-            "Total bytes of service traffic",
-            {"namespace", "service", "service_id", "status", "type"}
-        ),
-        request_seconds = prometheus:histogram(
-            "apisix_service_request_seconds", 
-            "Request latency in seconds",
-            {"namespace", "service", "service_id"},
-            {0.002, 0.005, 0.01, 0.02, 0.03, 0.05, 0.075, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1, 1.5, 2, 3}
-        )
-    }
+    if metrics.request_seconds == nil then
+        metrics.request_seconds = exporter.metric({
+            type = "histogram",
+            name = "apisix_service_request_seconds",
+            help = "Request latency in seconds",
+            labels = {"namespace", "service", "service_id"},
+            buckets = {0.002, 0.005, 0.01, 0.02, 0.03, 0.05, 0.075, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1, 1.5, 2, 3}
+        })
+    end
+end
+
+function _M.init()
+    -- 确保指标只初始化一次
+    init_metrics()
 end
 
 -- 从route labels中获取service_id
@@ -97,11 +102,6 @@ function _M.header_filter(conf, ctx)
 end
 
 function _M.log(conf, ctx)
-    if not prometheus or not metrics.traffic_bytes then
-        core.log.error("prometheus not initialized")
-        return
-    end
-
     -- 从upstream_info获取实际访问的service信息
     local service = get_service_from_upstream(ctx)
     if not service then
