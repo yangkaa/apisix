@@ -1,5 +1,5 @@
 local core     = require("apisix.core")
-local prometheus = require("apisix.plugins.prometheus")
+local exporter = require("apisix.plugins.prometheus.exporter")
 local ngx = ngx
 local pairs = pairs
 
@@ -25,23 +25,31 @@ local _M = {
 }
 
 -- 声明指标
-local metrics = {}
+local metrics = {
+    traffic_bytes = nil,
+    request_seconds = nil
+}
 
 function _M.init_worker()
     -- 在init_worker阶段初始化指标
-    metrics = {
-        traffic_bytes = prometheus:counter(
-            "apisix_service_traffic_bytes_total",
-            "Total bytes of service traffic",
-            {"namespace", "service", "service_id", "status", "type"}
-        ),
-        request_seconds = prometheus:histogram(
-            "apisix_service_request_seconds", 
-            "Request latency in seconds",
-            {"namespace", "service", "service_id"},
-            {0.002, 0.005, 0.01, 0.02, 0.03, 0.05, 0.075, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1, 1.5, 2, 3}
-        )
-    }
+    if not metrics.traffic_bytes then
+        metrics.traffic_bytes = exporter.metric({
+            type = "counter",
+            name = "apisix_service_traffic_bytes_total",
+            help = "Total bytes of service traffic",
+            labels = {"namespace", "service", "service_id", "status", "type"}
+        })
+    end
+
+    if not metrics.request_seconds then
+        metrics.request_seconds = exporter.metric({
+            type = "histogram",
+            name = "apisix_service_request_seconds",
+            help = "Request latency in seconds",
+            labels = {"namespace", "service", "service_id"},
+            buckets = {0.002, 0.005, 0.01, 0.02, 0.03, 0.05, 0.075, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1, 1.5, 2, 3}
+        })
+    end
 end
 
 -- 从route labels中获取service_id
