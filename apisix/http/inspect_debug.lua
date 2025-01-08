@@ -1,5 +1,12 @@
 local dbg = require("apisix.inspect.dbg")
 local core = require("apisix.core")
+dbg.set_hook("apisix/core/init.lua", 634, nil, function(info)
+    core.log.warn("matchroute type", type(info.vals.route))
+    return false
+end)
+
+
+
 dbg.set_hook("apisix/core/config_etcd.lua", 629, nil, function(info)
     local filter_res = "/routes"
     if info.vals.self.key:sub(-#filter_res) == filter_res and not info.vals.err then

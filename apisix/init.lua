@@ -632,6 +632,7 @@ function _M.http_access_phase()
     local route = api_ctx.matched_route
     core.log.error("matched route: ", core.json.delay_encode(route, true), "apictx.var: ", core.json.delay_encode(api_ctx.var, true))
     if not route then
+
         -- run global rule when there is no matching route
         local global_rules = apisix_global_rules.global_rules()
         core.log.error("global rules: ", core.json.delay_encode(global_rules, true))
@@ -641,6 +642,7 @@ function _M.http_access_phase()
         return core.response.exit(404,
                     {error_msg = "404 [Route Not Found]"})
     end
+
 
     core.log.info("matched route: ",
                   core.json.delay_encode(api_ctx.matched_route, true))
