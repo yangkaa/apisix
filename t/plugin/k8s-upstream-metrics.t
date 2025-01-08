@@ -5,6 +5,10 @@ no_long_string();
 no_shuffle();
 no_root_location();
 
+add_block_preprocessor(sub {
+    my ($block) = @_;
+});
+
 run_tests;
 
 __DATA__
@@ -40,9 +44,10 @@ done
                 ngx.HTTP_PUT,
                 [[{
                     "nodes": {
-                        "test-service.test-ns.svc.cluster.local:8080": 1
+                        "127.0.0.1:1980": 1
                     },
-                    "type": "roundrobin"
+                    "type": "roundrobin",
+                    "host": "test-service.test-ns.svc.cluster.local"
                 }]]
             )
             if code >= 300 then
@@ -83,51 +88,23 @@ passed
 --- no_error_log
 [error]
 
-=== TEST 3: test ingress traffic
---- config
-    location /t {
-        content_by_lua_block {
-            local http = require "resty.http"
-            local httpc = http.new()
-            local uri = "http://127.0.0.1:" .. ngx.var.server_port .. "/hello"
-            local res, err = httpc:request_uri(uri, {
-                method = "POST",
-                body = '{"test":"data"}',
-                headers = {
-                    ["Content-Type"] = "application/json",
-                }
-            })
-        }
-    }
+=== TEST 3: test metrics
 --- request
-GET /t
---- error_log eval
-[
-    qr/apisix_service_traffic_bytes_total.*service="test-service".*type="ingress"/
-]
+GET /hello
+--- more_headers
+Content-Type: application/json
+{"test":"data"}
+--- response_body
+hello world
 --- no_error_log
 [error]
-
-=== TEST 4: test egress traffic
---- config
-    location /t {
-        content_by_lua_block {
-            local http = require "resty.http"
-            local httpc = http.new()
-            local uri = "http://127.0.0.1:" .. ngx.var.server_port .. "/hello"
-            local res, err = httpc:request_uri(uri)
-        }
-    }
---- request
-GET /t
 --- error_log eval
 [
+    qr/apisix_service_traffic_bytes_total.*service="test-service".*type="ingress"/,
     qr/apisix_service_traffic_bytes_total.*service="test-service".*type="egress"/
 ]
---- no_error_log
-[error]
 
-=== TEST 5: verify metrics endpoint
+=== TEST 4: verify metrics endpoint
 --- request
 GET /apisix/prometheus/metrics
 --- response_body eval
