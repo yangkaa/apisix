@@ -83,17 +83,20 @@ local function get_service_from_ctx(ctx)
     if ctx.upstream_conf then
         core.log.info("found upstream_conf: ", core.json.encode(ctx.upstream_conf))
         if ctx.upstream_conf.nodes then
-            local node_addr = next(ctx.upstream_conf.nodes)
-            if node_addr then
+            -- 遍历nodes表获取第一个节点
+            for node_addr, _ in pairs(ctx.upstream_conf.nodes) do
                 core.log.info("found node address: ", node_addr)
-                local service = node_addr:match("^([^.]+)")
-                if service then
-                    core.log.info("extracted service from node address: ", service)
-                    return service
+                if type(node_addr) == "string" then
+                    local service = node_addr:match("^([^.]+)")
+                    if service then
+                        core.log.info("extracted service from node address: ", service)
+                        return service
+                    end
+                else
+                    core.log.info("node address is not a string: ", type(node_addr))
                 end
-            else
-                core.log.info("no node address found in upstream_conf.nodes")
             end
+            core.log.info("no valid node address found in upstream_conf.nodes")
         else
             core.log.info("no nodes found in upstream_conf")
         end
