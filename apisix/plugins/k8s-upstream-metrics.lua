@@ -244,15 +244,13 @@ function _M.log(conf, ctx)
     
     -- 计算请求和响应大小
     local request_size = tonumber(ctx.var.request_length) or 0
+    local response_size = tonumber(ctx.var.bytes_sent or 0)
     
     -- 添加详细的响应大小计算日志
     core.log.warn("========== response size calculation ==========")
-    core.log.warn("raw body_bytes_sent: ", ctx.var.body_bytes_sent)
-    core.log.warn("raw body_bytes_sent type: ", type(ctx.var.body_bytes_sent))
-    core.log.warn("tonumber(body_bytes_sent): ", tonumber(ctx.var.body_bytes_sent))
-    core.log.warn("upstream_headers_size: ", ctx.upstream_headers_size)
-    
-    local response_size = (ctx.upstream_headers_size or 0) + tonumber(ctx.var.body_bytes_sent or 0)
+    core.log.warn("raw bytes_sent: ", ctx.var.bytes_sent)
+    core.log.warn("raw bytes_sent type: ", type(ctx.var.bytes_sent))
+    core.log.warn("tonumber(bytes_sent): ", tonumber(ctx.var.bytes_sent))
     core.log.warn("final response_size: ", response_size)
     core.log.warn("========== response size calculation end ==========")
     
