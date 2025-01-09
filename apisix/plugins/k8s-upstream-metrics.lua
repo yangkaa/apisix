@@ -36,9 +36,8 @@ local metrics = {
 -- 初始化指标
 local function init_metrics()
     if not prometheus_registry then
-        -- 获取 prometheus registry
         prometheus_registry = exporter.get_prometheus()
-        core.log.info("prometheus registry initialized")
+        core.log.warn("prometheus registry initialized")
     end
 
     if not metrics.traffic_bytes then
@@ -47,7 +46,7 @@ local function init_metrics()
             "Total bytes of service traffic",
             {"namespace", "service", "service_id", "status", "type"}
         )
-        core.log.info("traffic_bytes metric initialized")
+        core.log.warn("traffic_bytes metric initialized")
     end
 
     if not metrics.request_seconds then
@@ -57,7 +56,7 @@ local function init_metrics()
             {"namespace", "service", "service_id"},
             {0.002, 0.005, 0.01, 0.02, 0.03, 0.05, 0.075, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1, 1.5, 2, 3}
         )
-        core.log.info("request_seconds metric initialized")
+        core.log.warn("request_seconds metric initialized")
     end
 end
 
@@ -77,44 +76,39 @@ end
 
 -- 从upstream获取service名称
 local function get_service_from_ctx(ctx)
-    core.log.info("trying to get service name from context...")
-    core.log.info("upstream: ", ctx.var.upstream)
-    core.log.info("host: ", ctx.var.host)
-    core.log.info("upstream_host: ", ctx.var.upstream_host)
+    core.log.warn("trying to get service name from context...")
+    core.log.warn("upstream: ", ctx.var.upstream)
+    core.log.warn("host: ", ctx.var.host)
+    core.log.warn("upstream_host: ", ctx.var.upstream_host)
     
-    -- 尝试从upstream变量获取
     if ctx.var.upstream then
         local ip_port = ctx.var.upstream:match("http://([^/]+)")
         if ip_port then
-            core.log.info("extracted ip_port from upstream: ", ip_port)
-            -- 可以通过 IP 反查 service 名称
+            core.log.warn("extracted ip_port from upstream: ", ip_port)
         end
     end
 
-    -- 尝试从picked_server获取
     if ctx.picked_server then
-        core.log.info("found picked_server: ", ctx.picked_server)
+        core.log.warn("found picked_server: ", ctx.picked_server)
         local service = ctx.picked_server:match("^([^.]+)")
         if service then
-            core.log.info("extracted service from picked_server: ", service)
+            core.log.warn("extracted service from picked_server: ", service)
             return service
         end
     end
 
-    -- 尝试从upstream_conf获取
     if ctx.upstream_conf then
-        core.log.info("found upstream_conf: ", core.json.encode(ctx.upstream_conf))
+        core.log.warn("found upstream_conf: ", core.json.encode(ctx.upstream_conf))
         if ctx.upstream_conf.name then
-            -- 如果upstream配置中有name字段，直接使用
             return ctx.upstream_conf.name
         end
         if ctx.upstream_conf.nodes then
             for node_addr, _ in pairs(ctx.upstream_conf.nodes) do
-                core.log.info("found node address: ", node_addr)
+                core.log.warn("found node address: ", node_addr)
                 if type(node_addr) == "string" then
                     local service = node_addr:match("^([^.]+)")
                     if service then
-                        core.log.info("extracted service from node address: ", service)
+                        core.log.warn("extracted service from node address: ", service)
                         return service
                     end
                 end
@@ -125,12 +119,14 @@ local function get_service_from_ctx(ctx)
     -- 最后尝试从route的service_name获取
     if ctx.matched_route and ctx.matched_route.value then
         if ctx.matched_route.value.service_name then
+            core.log.warn("found service_name in route: ", ctx.matched_route.value.service_name)
             return ctx.matched_route.value.service_name
         end
         -- 也可以从route的name中提取
         if ctx.matched_route.value.name then
-            local service = ctx.matched_route.value.name:match("^([^_]+)")
+            local service = ctx.matched_route.value.name:match("default_([^-]+)")
             if service then
+                core.log.warn("extracted service from route name: ", service)
                 return service
             end
         end
@@ -170,81 +166,70 @@ function _M.header_filter(conf, ctx)
 end
 
 function _M.log(conf, ctx)
-    -- 确保指标已初始化
     init_metrics()
     
-    -- 添加详细的调试日志
-    core.log.info("==================== k8s-upstream-metrics processing request ====================")
-    core.log.info("metrics status:")
-    core.log.info("  prometheus: ", prometheus_registry and "initialized" or "nil")
-    core.log.info("  traffic_bytes: ", metrics.traffic_bytes and "initialized" or "nil")
-    core.log.info("  request_seconds: ", metrics.request_seconds and "initialized" or "nil")
+    core.log.warn("==================== k8s-upstream-metrics processing request ====================")
+    core.log.warn("metrics status:")
+    core.log.warn("  prometheus: ", prometheus_registry and "initialized" or "nil")
+    core.log.warn("  traffic_bytes: ", metrics.traffic_bytes and "initialized" or "nil")
+    core.log.warn("  request_seconds: ", metrics.request_seconds and "initialized" or "nil")
     
-    core.log.info("request uri: ", ctx.var.uri)
-    core.log.info("request method: ", ctx.var.request_method)
-    core.log.info("host: ", ctx.var.host)
-    core.log.info("remote_addr: ", ctx.var.remote_addr)
-    core.log.info("picked_server: ", ctx.picked_server)
-    core.log.info("upstream_host: ", ctx.var.upstream_host)
+    core.log.warn("request uri: ", ctx.var.uri)
+    core.log.warn("request method: ", ctx.var.request_method)
+    core.log.warn("host: ", ctx.var.host)
+    core.log.warn("remote_addr: ", ctx.var.remote_addr)
+    core.log.warn("picked_server: ", ctx.picked_server)
+    core.log.warn("upstream_host: ", ctx.var.upstream_host)
     
-    -- 打印完整的upstream配置
     if ctx.upstream_conf then
-        core.log.info("upstream_conf: ", core.json.encode(ctx.upstream_conf))
+        core.log.warn("upstream_conf: ", core.json.encode(ctx.upstream_conf))
     else
-        core.log.info("no upstream_conf found")
+        core.log.warn("no upstream_conf found")
     end
     
-    -- 打印路由信息
     if ctx.matched_route then
-        core.log.info("matched_route: ", core.json.encode(ctx.matched_route))
+        core.log.warn("matched_route: ", core.json.encode(ctx.matched_route))
     else
-        core.log.info("no matched_route found")
+        core.log.warn("no matched_route found")
     end
     
-    -- 从ctx获取service信息
     local service = get_service_from_ctx(ctx)
     if not service then
         core.log.error("no service found in context")
         return
     end
-    core.log.info("final selected service: ", service)
+    core.log.warn("final selected service: ", service)
     
-    -- 从route获取namespace
     local route = ctx.matched_route
     if not route then
         core.log.error("no matched route found")
         return
     end
     
-    
     local namespace = route.value and route.value.metadata and route.value.metadata.namespace
     if not namespace then
-        core.log.warn("no namespace found in route metadata, using default")
+        core.log.error("no namespace found in route metadata, using default")
         namespace = "default"
     end
-    core.log.info("namespace: ", namespace)
+    core.log.warn("namespace: ", namespace)
     
-    -- 获取service_id
     local service_id
     if conf and conf.enable_service_id then
         service_id = get_service_id_from_labels(route)
-        core.log.info("service_id from labels: ", service_id)
+        core.log.warn("service_id from labels: ", service_id)
     end
     
-    -- 计算请求和响应大小
     local request_size = tonumber(ctx.var.request_length) or 0
     local response_size = (ctx.upstream_headers_size or 0) + tonumber(ctx.var.body_bytes_sent or 0)
-    core.log.info("request_size: ", request_size, ", response_size: ", response_size)
-    core.log.info("headers_size: ", ctx.upstream_headers_size)
+    core.log.warn("request_size: ", request_size, ", response_size: ", response_size)
+    core.log.warn("headers_size: ", ctx.upstream_headers_size)
     
-    -- 更新指标前的最终确认
-    core.log.info("updating metrics with:")
-    core.log.info("  namespace: ", namespace)
-    core.log.info("  service: ", service)
-    core.log.info("  service_id: ", service_id)
-    core.log.info("  status: ", ctx.var.status)
+    core.log.warn("updating metrics with:")
+    core.log.warn("  namespace: ", namespace)
+    core.log.warn("  service: ", service)
+    core.log.warn("  service_id: ", service_id)
+    core.log.warn("  status: ", ctx.var.status)
     
-    -- 更新指标
     metrics.traffic_bytes:inc(request_size, {
         namespace,
         service,
@@ -261,7 +246,6 @@ function _M.log(conf, ctx)
         "egress"
     })
     
-    -- 更新延迟指标
     local upstream_latency = tonumber(ctx.var.upstream_response_time) or 0
     metrics.request_seconds:observe(upstream_latency, {
         namespace,
@@ -269,7 +253,7 @@ function _M.log(conf, ctx)
         service_id or ""
     })
     
-    core.log.info("==================== k8s-upstream-metrics finished ====================")
+    core.log.warn("==================== k8s-upstream-metrics finished ====================")
 end
 
 return _M 
