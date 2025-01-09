@@ -1,6 +1,5 @@
 local core     = require("apisix.core")
-local exporter = require("apisix.plugins.prometheus.exporter")
-local prometheus
+local prometheus = require("apisix.plugins.prometheus.exporter")
 local ngx = ngx
 local pairs = pairs
 
@@ -35,12 +34,6 @@ local metrics = {
 
 -- 初始化指标
 local function init_metrics()
-    if not prometheus then
-        -- 确保prometheus已初始化
-        prometheus = exporter.init()
-        core.log.info("prometheus exporter initialized")
-    end
-
     if not metrics.traffic_bytes then
         metrics.traffic_bytes = prometheus:counter(
             "apisix_service_traffic_bytes_total",
