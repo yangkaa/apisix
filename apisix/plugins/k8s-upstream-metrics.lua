@@ -63,16 +63,71 @@ local function get_service_id_from_labels(route)
     return route.value.labels.service_id
 end
 
--- 从picked_server获取service名称
-local function get_service_from_picked_server(ctx)
-    local server = ctx.picked_server
-    if not server then
-        return nil
+-- 从upstream获取service名称
+local function get_service_from_ctx(ctx)
+    core.log.info("trying to get service name from context...")
+
+    -- 尝试从picked_server获取
+    if ctx.picked_server then
+        core.log.info("found picked_server: ", ctx.picked_server)
+        local service = ctx.picked_server:match("^([^.]+)")
+        if service then
+            core.log.info("extracted service from picked_server: ", service)
+            return service
+        end
+    else
+        core.log.info("no picked_server found")
     end
-    
-    -- server通常格式为: serviceName.namespace.svc:port
-    local service = server:match("^([^.]+)")
-    return service
+
+    -- 尝试从upstream获取
+    if ctx.upstream_conf then
+        core.log.info("found upstream_conf: ", core.json.encode(ctx.upstream_conf))
+        if ctx.upstream_conf.nodes then
+            local node_addr = next(ctx.upstream_conf.nodes)
+            if node_addr then
+                core.log.info("found node address: ", node_addr)
+                local service = node_addr:match("^([^.]+)")
+                if service then
+                    core.log.info("extracted service from node address: ", service)
+                    return service
+                end
+            else
+                core.log.info("no node address found in upstream_conf.nodes")
+            end
+        else
+            core.log.info("no nodes found in upstream_conf")
+        end
+    else
+        core.log.info("no upstream_conf found")
+    end
+
+    -- 尝试从var.upstream_host获取
+    if ctx.var and ctx.var.upstream_host then
+        core.log.info("found upstream_host: ", ctx.var.upstream_host)
+        local service = ctx.var.upstream_host:match("^([^.]+)")
+        if service then
+            core.log.info("extracted service from upstream_host: ", service)
+            return service
+        end
+    else
+        core.log.info("no upstream_host found")
+    end
+
+    -- 最后尝试从route的service_name获取
+    if ctx.matched_route then
+        core.log.info("found matched_route: ", core.json.encode(ctx.matched_route))
+        if ctx.matched_route.value and ctx.matched_route.value.service_name then
+            core.log.info("found service_name in route: ", ctx.matched_route.value.service_name)
+            return ctx.matched_route.value.service_name
+        else
+            core.log.info("no service_name found in route")
+        end
+    else
+        core.log.info("no matched_route found")
+    end
+
+    core.log.error("failed to get service name from all sources")
+    return nil
 end
 
 function _M.check_args(conf)
@@ -98,17 +153,35 @@ end
 
 function _M.log(conf, ctx)
     -- 添加详细的调试日志
-    core.log.info("k8s-upstream-metrics processing request")
+    core.log.info("==================== k8s-upstream-metrics processing request ====================")
+    core.log.info("request uri: ", ctx.var.uri)
+    core.log.info("request method: ", ctx.var.request_method)
     core.log.info("host: ", ctx.var.host)
+    core.log.info("remote_addr: ", ctx.var.remote_addr)
     core.log.info("picked_server: ", ctx.picked_server)
+    core.log.info("upstream_host: ", ctx.var.upstream_host)
     
-    -- 从picked_server获取实际处理请求的service信息
-    local service = get_service_from_picked_server(ctx)
+    -- 打印完整的upstream配置
+    if ctx.upstream_conf then
+        core.log.info("upstream_conf: ", core.json.encode(ctx.upstream_conf))
+    else
+        core.log.info("no upstream_conf found")
+    end
+    
+    -- 打印路由信息
+    if ctx.matched_route then
+        core.log.info("matched_route: ", core.json.encode(ctx.matched_route))
+    else
+        core.log.info("no matched_route found")
+    end
+    
+    -- 从ctx获取service信息
+    local service = get_service_from_ctx(ctx)
     if not service then
-        core.log.error("no service found in picked_server")
+        core.log.error("no service found in context")
         return
     end
-    core.log.info("service: ", service)
+    core.log.info("final selected service: ", service)
     
     -- 从route获取namespace
     local route = ctx.matched_route
@@ -116,12 +189,11 @@ function _M.log(conf, ctx)
         core.log.error("no matched route found")
         return
     end
-    core.log.info("route: ", core.json.encode(route))
     
     local namespace = route.value and route.value.metadata and route.value.metadata.namespace
     if not namespace then
-        core.log.warn("no namespace found in route metadata")
-        namespace = "default"  -- 使用默认namespace
+        core.log.warn("no namespace found in route metadata, using default")
+        namespace = "default"
     end
     core.log.info("namespace: ", namespace)
     
@@ -129,13 +201,20 @@ function _M.log(conf, ctx)
     local service_id
     if conf and conf.enable_service_id then
         service_id = get_service_id_from_labels(route)
+        core.log.info("service_id from labels: ", service_id)
     end
-    core.log.info("service_id: ", service_id)
     
     -- 计算请求和响应大小
     local request_size = tonumber(ctx.var.request_length) or 0
     local response_size = (ctx.upstream_headers_size or 0) + (ctx.var.body_bytes_sent or 0)
     core.log.info("request_size: ", request_size, ", response_size: ", response_size)
+    
+    -- 更新指标前的最终确认
+    core.log.info("updating metrics with:")
+    core.log.info("  namespace: ", namespace)
+    core.log.info("  service: ", service)
+    core.log.info("  service_id: ", service_id)
+    core.log.info("  status: ", ctx.var.status)
     
     -- 更新指标
     metrics.traffic_bytes:inc(request_size, {
@@ -161,6 +240,8 @@ function _M.log(conf, ctx)
         service = service,
         service_id = service_id or ""
     })
+    
+    core.log.info("==================== k8s-upstream-metrics finished ====================")
 end
 
 return _M 

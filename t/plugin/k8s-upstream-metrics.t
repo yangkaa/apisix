@@ -42,7 +42,7 @@ passed
 --- no_error_log
 [error]
 
-=== TEST 2: setup route with multiple backends
+=== TEST 2: setup route with upstream
 --- config
     location /t {
         content_by_lua_block {
@@ -51,34 +51,14 @@ passed
                 ngx.HTTP_PUT,
                 [[{
                     "uri": "/hello",
-                    "plugins": {
-                        "traffic-split": {
-                            "rules": [
-                                {
-                                    "weighted_upstreams": [
-                                        {
-                                            "upstream": {
-                                                "name": "backend1",
-                                                "type": "roundrobin",
-                                                "nodes": {
-                                                    "backend1.default.svc:5000": 70
-                                                }
-                                            }
-                                        },
-                                        {
-                                            "upstream": {
-                                                "name": "backend2",
-                                                "type": "roundrobin",
-                                                "nodes": {
-                                                    "backend2.default.svc:5000": 30
-                                                }
-                                            }
-                                        }
-                                    ]
-                                }
-                            ]
-                        }
-                    }
+                    "upstream": {
+                        "type": "roundrobin",
+                        "nodes": {
+                            "grd6e24e.default.svc:5000": 1
+                        },
+                        "name": "grd6e24e"
+                    },
+                    "service_name": "grd6e24e"
                 }]]
             )
             if code >= 300 then
