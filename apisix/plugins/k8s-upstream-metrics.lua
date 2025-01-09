@@ -1,5 +1,6 @@
 local core     = require("apisix.core")
 local exporter = require("apisix.plugins.prometheus.exporter")
+local prometheus
 local ngx = ngx
 local pairs = pairs
 
@@ -34,23 +35,29 @@ local metrics = {
 
 -- 初始化指标
 local function init_metrics()
+    if not prometheus then
+        -- 确保prometheus已初始化
+        prometheus = exporter.init()
+        core.log.info("prometheus exporter initialized")
+    end
+
     if not metrics.traffic_bytes then
-        metrics.traffic_bytes = exporter.metric({
-            type = "counter",
-            name = "apisix_service_traffic_bytes_total",
-            help = "Total bytes of service traffic",
-            labels = {"namespace", "service", "service_id", "status", "type"}
-        })
+        metrics.traffic_bytes = prometheus:counter(
+            "apisix_service_traffic_bytes_total",
+            "Total bytes of service traffic",
+            {"namespace", "service", "service_id", "status", "type"}
+        )
+        core.log.info("traffic_bytes metric initialized")
     end
 
     if not metrics.request_seconds then
-        metrics.request_seconds = exporter.metric({
-            type = "histogram",
-            name = "apisix_service_request_seconds",
-            help = "Request latency in seconds",
-            labels = {"namespace", "service", "service_id"},
-            buckets = {0.002, 0.005, 0.01, 0.02, 0.03, 0.05, 0.075, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1, 1.5, 2, 3}
-        })
+        metrics.request_seconds = prometheus:histogram(
+            "apisix_service_request_seconds",
+            "Request latency in seconds",
+            {"namespace", "service", "service_id"},
+            {0.002, 0.005, 0.01, 0.02, 0.03, 0.05, 0.075, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1, 1.5, 2, 3}
+        )
+        core.log.info("request_seconds metric initialized")
     end
 end
 
@@ -165,6 +172,11 @@ function _M.log(conf, ctx)
     
     -- 添加详细的调试日志
     core.log.info("==================== k8s-upstream-metrics processing request ====================")
+    core.log.info("metrics status:")
+    core.log.info("  prometheus: ", prometheus and "initialized" or "nil")
+    core.log.info("  traffic_bytes: ", metrics.traffic_bytes and "initialized" or "nil")
+    core.log.info("  request_seconds: ", metrics.request_seconds and "initialized" or "nil")
+    
     core.log.info("request uri: ", ctx.var.uri)
     core.log.info("request method: ", ctx.var.request_method)
     core.log.info("host: ", ctx.var.host)
