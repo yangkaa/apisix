@@ -118,16 +118,22 @@ local function get_service_from_ctx(ctx)
 
     -- 最后尝试从route的service_name获取
     if ctx.matched_route and ctx.matched_route.value then
+        core.log.warn("trying from matched_route...")
+        
         if ctx.matched_route.value.service_name then
             core.log.warn("found service_name in route: ", ctx.matched_route.value.service_name)
             return ctx.matched_route.value.service_name
         end
+        
         -- 也可以从route的name中提取
         if ctx.matched_route.value.name then
+            core.log.warn("trying to extract from route name: ", ctx.matched_route.value.name)
             local service = ctx.matched_route.value.name:match("default_([^-]+)")
             if service then
                 core.log.warn("extracted service from route name: ", service)
                 return service
+            else
+                core.log.warn("failed to extract service from route name")
             end
         end
     end
