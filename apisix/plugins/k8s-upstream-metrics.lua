@@ -241,27 +241,27 @@ function _M.log(conf, ctx)
     
     -- 更新指标
     metrics.traffic_bytes:inc(request_size, {
-        namespace = namespace or "",
-        service = service,
-        service_id = service_id or "",
-        status = ctx.var.status,
-        type = "ingress"
+        namespace,
+        service,
+        service_id or "",
+        tostring(ctx.var.status),
+        "ingress"
     })
     
     metrics.traffic_bytes:inc(response_size, {
-        namespace = namespace or "",
-        service = service,
-        service_id = service_id or "",
-        status = ctx.var.status,
-        type = "egress"
+        namespace,
+        service,
+        service_id or "",
+        tostring(ctx.var.status),
+        "egress"
     })
     
     -- 更新延迟指标
     local upstream_latency = tonumber(ctx.var.upstream_response_time) or 0
     metrics.request_seconds:observe(upstream_latency, {
-        namespace = namespace or "",
-        service = service,
-        service_id = service_id or ""
+        namespace,
+        service,
+        service_id or ""
     })
     
     core.log.info("==================== k8s-upstream-metrics finished ====================")
