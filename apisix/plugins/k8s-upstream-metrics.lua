@@ -32,13 +32,10 @@ local metrics = {
     request_seconds = nil
 }
 
--- 初始化 Prometheus 实例
-local prometheus_instance = prometheus.init("k8s_upstream_metrics")
-
 -- 初始化指标
 local function init_metrics()
     if not metrics.traffic_bytes then
-        metrics.traffic_bytes = prometheus_instance:counter(
+        metrics.traffic_bytes = prometheus:counter(
             "apisix_service_traffic_bytes_total",
             "Total bytes of service traffic",
             {"namespace", "service", "service_id", "status", "type"}
@@ -47,7 +44,7 @@ local function init_metrics()
     end
 
     if not metrics.request_seconds then
-        metrics.request_seconds = prometheus_instance:histogram(
+        metrics.request_seconds = prometheus:histogram(
             "apisix_service_request_seconds",
             "Request latency in seconds",
             {"namespace", "service", "service_id"},
@@ -263,4 +260,4 @@ function _M.log(conf, ctx)
     core.log.info("==================== k8s-upstream-metrics finished ====================")
 end
 
-return _M
+return _M 
