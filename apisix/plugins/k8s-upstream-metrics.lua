@@ -78,6 +78,18 @@ end
 -- 从upstream获取service名称
 local function get_service_from_ctx(ctx)
     core.log.info("trying to get service name from context...")
+    core.log.info("upstream: ", ctx.var.upstream)
+    core.log.info("host: ", ctx.var.host)
+    core.log.info("upstream_host: ", ctx.var.upstream_host)
+    
+    -- 尝试从upstream变量获取
+    if ctx.var.upstream then
+        local ip_port = ctx.var.upstream:match("http://([^/]+)")
+        if ip_port then
+            core.log.info("extracted ip_port from upstream: ", ip_port)
+            -- 可以通过 IP 反查 service 名称
+        end
+    end
 
     -- 尝试从picked_server获取
     if ctx.picked_server then
@@ -87,15 +99,16 @@ local function get_service_from_ctx(ctx)
             core.log.info("extracted service from picked_server: ", service)
             return service
         end
-    else
-        core.log.info("no picked_server found")
     end
 
-    -- 尝试从upstream获取
+    -- 尝试从upstream_conf获取
     if ctx.upstream_conf then
         core.log.info("found upstream_conf: ", core.json.encode(ctx.upstream_conf))
+        if ctx.upstream_conf.name then
+            -- 如果upstream配置中有name字段，直接使用
+            return ctx.upstream_conf.name
+        end
         if ctx.upstream_conf.nodes then
-            -- 遍历nodes表获取第一个节点
             for node_addr, _ in pairs(ctx.upstream_conf.nodes) do
                 core.log.info("found node address: ", node_addr)
                 if type(node_addr) == "string" then
@@ -104,41 +117,23 @@ local function get_service_from_ctx(ctx)
                         core.log.info("extracted service from node address: ", service)
                         return service
                     end
-                else
-                    core.log.info("node address is not a string: ", type(node_addr))
                 end
             end
-            core.log.info("no valid node address found in upstream_conf.nodes")
-        else
-            core.log.info("no nodes found in upstream_conf")
         end
-    else
-        core.log.info("no upstream_conf found")
-    end
-
-    -- 尝试从var.upstream_host获取
-    if ctx.var and ctx.var.upstream_host then
-        core.log.info("found upstream_host: ", ctx.var.upstream_host)
-        local service = ctx.var.upstream_host:match("^([^.]+)")
-        if service then
-            core.log.info("extracted service from upstream_host: ", service)
-            return service
-        end
-    else
-        core.log.info("no upstream_host found")
     end
 
     -- 最后尝试从route的service_name获取
-    if ctx.matched_route then
-        core.log.info("found matched_route: ", core.json.encode(ctx.matched_route))
-        if ctx.matched_route.value and ctx.matched_route.value.service_name then
-            core.log.info("found service_name in route: ", ctx.matched_route.value.service_name)
+    if ctx.matched_route and ctx.matched_route.value then
+        if ctx.matched_route.value.service_name then
             return ctx.matched_route.value.service_name
-        else
-            core.log.info("no service_name found in route")
         end
-    else
-        core.log.info("no matched_route found")
+        -- 也可以从route的name中提取
+        if ctx.matched_route.value.name then
+            local service = ctx.matched_route.value.name:match("^([^_]+)")
+            if service then
+                return service
+            end
+        end
     end
 
     core.log.error("failed to get service name from all sources")
