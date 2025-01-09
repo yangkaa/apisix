@@ -1,5 +1,5 @@
 local core     = require("apisix.core")
-local prometheus = require("apisix.plugins.prometheus.exporter")
+local exporter = require("apisix.plugins.prometheus.exporter")
 local ngx = ngx
 local pairs = pairs
 
@@ -26,7 +26,8 @@ local _M = {
     run_policy = 'prefer_route',
 }
 
--- 声明指标
+-- 声明指标和 registry
+local prometheus_registry
 local metrics = {
     traffic_bytes = nil,
     request_seconds = nil
@@ -34,8 +35,14 @@ local metrics = {
 
 -- 初始化指标
 local function init_metrics()
+    if not prometheus_registry then
+        -- 获取 prometheus registry
+        prometheus_registry = exporter.get_prometheus()
+        core.log.info("prometheus registry initialized")
+    end
+
     if not metrics.traffic_bytes then
-        metrics.traffic_bytes = prometheus:counter(
+        metrics.traffic_bytes = prometheus_registry:counter(
             "apisix_service_traffic_bytes_total",
             "Total bytes of service traffic",
             {"namespace", "service", "service_id", "status", "type"}
@@ -44,7 +51,7 @@ local function init_metrics()
     end
 
     if not metrics.request_seconds then
-        metrics.request_seconds = prometheus:histogram(
+        metrics.request_seconds = prometheus_registry:histogram(
             "apisix_service_request_seconds",
             "Request latency in seconds",
             {"namespace", "service", "service_id"},
@@ -166,7 +173,7 @@ function _M.log(conf, ctx)
     -- 添加详细的调试日志
     core.log.info("==================== k8s-upstream-metrics processing request ====================")
     core.log.info("metrics status:")
-    core.log.info("  prometheus: ", prometheus and "initialized" or "nil")
+    core.log.info("  prometheus: ", prometheus_registry and "initialized" or "nil")
     core.log.info("  traffic_bytes: ", metrics.traffic_bytes and "initialized" or "nil")
     core.log.info("  request_seconds: ", metrics.request_seconds and "initialized" or "nil")
     
