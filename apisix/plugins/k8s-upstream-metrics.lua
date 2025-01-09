@@ -24,6 +24,10 @@ local _M = {
     metadata_schema = nil,
     type = 'auth',
     run_policy = 'prefer_route',
+    phases = {
+        log = 1,
+        header_filter = 1
+    }
 }
 
 -- 声明指标和 registry
