@@ -184,27 +184,6 @@ function _M.check_args(conf)
     return core.schema.check(schema, conf)
 end
 
--- 记录响应头大小
-local function get_headers_size(headers)
-    local size = 0
-    -- 计算状态行大小 (HTTP/1.1 200 OK\r\n)
-    size = size + 8 + 1 + 3 + 3 + 2  -- "HTTP/1.1 200 OK\r\n"
-    
-    -- 计算每个响应头的大小
-    for k, v in pairs(headers) do
-        size = size + #k + 2 + #v + 2  -- "key: value\r\n"
-    end
-    
-    -- 最后的空行
-    size = size + 2  -- "\r\n"
-    
-    return size
-end
-
-function _M.header_filter(conf, ctx)
-    ctx.upstream_headers_size = get_headers_size(ngx.resp.get_headers())
-end
-
 function _M.log(conf, ctx)
     init_metrics()
     
@@ -259,8 +238,20 @@ function _M.log(conf, ctx)
         core.log.warn("service_id from labels: ", service_id)
     end
     
+    -- 计算请求和响应大小
     local request_size = tonumber(ctx.var.request_length) or 0
+    
+    -- 添加详细的响应大小计算日志
+    core.log.warn("========== response size calculation ==========")
+    core.log.warn("raw body_bytes_sent: ", ctx.var.body_bytes_sent)
+    core.log.warn("raw body_bytes_sent type: ", type(ctx.var.body_bytes_sent))
+    core.log.warn("tonumber(body_bytes_sent): ", tonumber(ctx.var.body_bytes_sent))
+    core.log.warn("upstream_headers_size: ", ctx.upstream_headers_size)
+    
     local response_size = (ctx.upstream_headers_size or 0) + tonumber(ctx.var.body_bytes_sent or 0)
+    core.log.warn("final response_size: ", response_size)
+    core.log.warn("========== response size calculation end ==========")
+    
     core.log.warn("request_size: ", request_size, ", response_size: ", response_size)
     core.log.warn("headers_size: ", ctx.upstream_headers_size)
     
