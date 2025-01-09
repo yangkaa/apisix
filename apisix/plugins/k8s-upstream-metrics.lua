@@ -221,6 +221,7 @@ function _M.log(conf, ctx)
         return
     end
     
+    
     local namespace = route.value and route.value.metadata and route.value.metadata.namespace
     if not namespace then
         core.log.warn("no namespace found in route metadata, using default")
