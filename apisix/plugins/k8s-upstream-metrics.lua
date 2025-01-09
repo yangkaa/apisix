@@ -48,7 +48,7 @@ local function init_metrics()
         metrics.traffic_bytes = prometheus_registry:counter(
             "apisix_service_traffic_bytes_total",
             "Total bytes of service traffic",
-            {"namespace", "service", "service_id", "status", "type"}
+            {"namespace", "service", "service_id", "port", "status", "type"}
         )
         core.log.warn("traffic_bytes metric initialized")
     end
@@ -57,7 +57,7 @@ local function init_metrics()
         metrics.request_seconds = prometheus_registry:histogram(
             "apisix_service_request_seconds",
             "Request latency in seconds",
-            {"namespace", "service", "service_id"},
+            {"namespace", "service", "service_id", "port"},
             {0.002, 0.005, 0.01, 0.02, 0.03, 0.05, 0.075, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1, 1.5, 2, 3}
         )
         core.log.warn("request_seconds metric initialized")
@@ -76,6 +76,22 @@ local function get_service_id_from_labels(route)
     end
     
     return route.value.labels.service_id
+end
+
+-- 从 upstream name 提取信息
+-- 例如: default_nginx_80 -> namespace=default, service=nginx, port=80
+local function parse_upstream_name(name)
+    if not name then
+        return nil, nil, nil
+    end
+    
+    local ns, svc, port = name:match("^([^_]+)_([^_]+)_(%d+)$")
+    if not ns or not svc or not port then
+        core.log.error("failed to parse upstream name: ", name)
+        return nil, nil, nil
+    end
+    
+    return ns, svc, port
 end
 
 -- 从upstream获取service名称
@@ -120,7 +136,11 @@ local function get_service_from_ctx(ctx)
         core.log.warn("found upstream_conf")
         if ctx.upstream_conf.name then
             core.log.warn("found name in upstream_conf: ", ctx.upstream_conf.name)
-            return ctx.upstream_conf.name
+            local ns, svc, port = parse_upstream_name(ctx.upstream_conf.name)
+            if ns and svc and port then
+                core.log.warn("parsed upstream name: ns=", ns, ", svc=", svc, ", port=", port)
+                return ns, svc, port
+            end
         end
         if ctx.upstream_conf.nodes then
             core.log.warn("found nodes in upstream_conf")
@@ -177,7 +197,7 @@ local function get_service_from_ctx(ctx)
 
     core.log.warn("========== get_service_from_ctx end: no service found ==========")
     core.log.error("failed to get service name from all sources")
-    return nil
+    return nil, nil, nil
 end
 
 function _M.check_args(conf)
@@ -216,29 +236,16 @@ function _M.log(conf, ctx)
         core.log.warn("no matched_route found")
     end
     
-    local service = get_service_from_ctx(ctx)
+    local namespace, service, port = get_service_from_ctx(ctx)
     if not service then
         core.log.error("no service found in context")
         return
     end
-    core.log.warn("final selected service: ", service)
-    
-    local route = ctx.matched_route
-    if not route then
-        core.log.error("no matched route found")
-        return
-    end
-    
-    local namespace = route.value and route.value.metadata and route.value.metadata.namespace
-    if not namespace then
-        core.log.error("no namespace found in route metadata, using default")
-        namespace = "default"
-    end
-    core.log.warn("namespace: ", namespace)
+    core.log.warn("final selected: ns=", namespace, ", svc=", service, ", port=", port)
     
     local service_id
     if conf and conf.enable_service_id then
-        service_id = get_service_id_from_labels(route)
+        service_id = get_service_id_from_labels(ctx.matched_route)
         core.log.warn("service_id from labels: ", service_id)
     end
     
@@ -268,6 +275,7 @@ function _M.log(conf, ctx)
         namespace,
         service,
         service_id or "",
+        port,
         tostring(ctx.var.status),
         "ingress"
     })
@@ -276,6 +284,7 @@ function _M.log(conf, ctx)
         namespace,
         service,
         service_id or "",
+        port,
         tostring(ctx.var.status),
         "egress"
     })
@@ -284,7 +293,8 @@ function _M.log(conf, ctx)
     metrics.request_seconds:observe(upstream_latency, {
         namespace,
         service,
-        service_id or ""
+        service_id or "",
+        port
     })
     
     core.log.warn("==================== k8s-upstream-metrics finished ====================")
