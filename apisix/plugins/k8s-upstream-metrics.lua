@@ -263,6 +263,7 @@ function _M.log(conf, ctx)
     core.log.warn("  service_id: ", service_id)
     core.log.warn("  status: ", ctx.var.status)
     
+    
     metrics.traffic_bytes:inc(request_size, {
         namespace,
         service,
