@@ -32,8 +32,8 @@ local metrics = {
     request_seconds = nil
 }
 
-function _M.init_worker()
-    -- 在init_worker阶段初始化指标
+-- 初始化指标
+local function init_metrics()
     if not metrics.traffic_bytes then
         metrics.traffic_bytes = exporter.metric({
             type = "counter",
@@ -52,6 +52,11 @@ function _M.init_worker()
             buckets = {0.002, 0.005, 0.01, 0.02, 0.03, 0.05, 0.075, 0.1, 0.2, 0.3, 0.4, 0.5, 0.75, 1, 1.5, 2, 3}
         })
     end
+end
+
+function _M.init_worker()
+    -- 在init_worker阶段初始化指标
+    init_metrics()
 end
 
 -- 从route labels中获取service_id
@@ -155,6 +160,9 @@ function _M.header_filter(conf, ctx)
 end
 
 function _M.log(conf, ctx)
+    -- 确保指标已初始化
+    init_metrics()
+    
     -- 添加详细的调试日志
     core.log.info("==================== k8s-upstream-metrics processing request ====================")
     core.log.info("request uri: ", ctx.var.uri)
