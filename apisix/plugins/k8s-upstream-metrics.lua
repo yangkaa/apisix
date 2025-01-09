@@ -103,12 +103,18 @@ function _M.header_filter(conf, ctx)
 end
 
 function _M.log(conf, ctx)
+    -- 添加详细的调试日志
+    core.log.info("k8s-upstream-metrics processing request")
+    core.log.info("host: ", ctx.var.host)
+    core.log.info("upstream_info: ", core.json.encode(ctx.upstream_info))
+    
     -- 从upstream_info获取实际访问的service信息
     local service = get_service_from_upstream(ctx)
     if not service then
-        core.log.error("failed to get service from upstream info")
+        core.log.error("failed to get service from upstream info: ", core.json.encode(ctx.upstream_info))
         return
     end
+    core.log.info("service: ", service)
     
     -- 从route获取namespace
     local route = ctx.matched_route
@@ -116,25 +122,27 @@ function _M.log(conf, ctx)
         core.log.error("no matched route found")
         return
     end
+    core.log.info("route: ", core.json.encode(route))
     
     local namespace = route.value and route.value.metadata and route.value.metadata.namespace
     if not namespace then
         core.log.warn("no namespace found in route metadata")
     end
+    core.log.info("namespace: ", namespace)
     
     -- 获取service_id
     local service_id
-    if conf.enable_service_id then
+    if conf and conf.enable_service_id then
         service_id = get_service_id_from_labels(route)
     end
+    core.log.info("service_id: ", service_id)
     
     -- 计算请求和响应大小
-    local request_size = tonumber(ctx.var.request_length) or 0  -- 入口流量
-    local response_headers_size = ctx.upstream_headers_size or 0
-    local response_body_size = ctx.var.body_bytes_sent or 0
-    local response_size = response_headers_size + response_body_size  -- 出口流量
+    local request_size = tonumber(ctx.var.request_length) or 0
+    local response_size = (ctx.upstream_headers_size or 0) + (ctx.var.body_bytes_sent or 0)
+    core.log.info("request_size: ", request_size, ", response_size: ", response_size)
     
-    -- 更新入口流量指标
+    -- 更新指标
     metrics.traffic_bytes:inc(request_size, {
         namespace = namespace or "",
         service = service,
@@ -143,7 +151,6 @@ function _M.log(conf, ctx)
         type = "ingress"
     })
     
-    -- 更新出口流量指标
     metrics.traffic_bytes:inc(response_size, {
         namespace = namespace or "",
         service = service,
