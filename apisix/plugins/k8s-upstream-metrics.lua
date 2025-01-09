@@ -76,68 +76,102 @@ end
 
 -- 从upstream获取service名称
 local function get_service_from_ctx(ctx)
+    core.log.warn("========== get_service_from_ctx start ==========")
     core.log.warn("trying to get service name from context...")
     core.log.warn("upstream: ", ctx.var.upstream)
     core.log.warn("host: ", ctx.var.host)
     core.log.warn("upstream_host: ", ctx.var.upstream_host)
     
+    -- 步骤1: 尝试从 upstream 获取
     if ctx.var.upstream then
+        core.log.warn("step 1: trying to extract from upstream")
         local ip_port = ctx.var.upstream:match("http://([^/]+)")
         if ip_port then
             core.log.warn("extracted ip_port from upstream: ", ip_port)
+        else
+            core.log.warn("failed to extract ip_port from upstream")
         end
+    else
+        core.log.warn("step 1: upstream is nil, skipping")
     end
 
+    -- 步骤2: 尝试从 picked_server 获取
+    core.log.warn("step 2: trying to extract from picked_server")
     if ctx.picked_server then
         core.log.warn("found picked_server: ", ctx.picked_server)
         local service = ctx.picked_server:match("^([^.]+)")
         if service then
-            core.log.warn("extracted service from picked_server: ", service)
+            core.log.warn("successfully extracted service from picked_server: ", service)
             return service
+        else
+            core.log.warn("failed to extract service from picked_server")
         end
+    else
+        core.log.warn("picked_server is nil, skipping")
     end
 
+    -- 步骤3: 尝试从 upstream_conf 获取
+    core.log.warn("step 3: trying to extract from upstream_conf")
     if ctx.upstream_conf then
-        core.log.warn("found upstream_conf: ", core.json.encode(ctx.upstream_conf))
+        core.log.warn("found upstream_conf")
         if ctx.upstream_conf.name then
+            core.log.warn("found name in upstream_conf: ", ctx.upstream_conf.name)
             return ctx.upstream_conf.name
         end
         if ctx.upstream_conf.nodes then
+            core.log.warn("found nodes in upstream_conf")
             for node_addr, _ in pairs(ctx.upstream_conf.nodes) do
-                core.log.warn("found node address: ", node_addr)
+                core.log.warn("checking node address: ", node_addr)
                 if type(node_addr) == "string" then
                     local service = node_addr:match("^([^.]+)")
                     if service then
-                        core.log.warn("extracted service from node address: ", service)
+                        core.log.warn("successfully extracted service from node address: ", service)
                         return service
+                    else
+                        core.log.warn("failed to extract service from node address")
                     end
+                else
+                    core.log.warn("node address is not a string: ", type(node_addr))
                 end
             end
+        else
+            core.log.warn("no nodes found in upstream_conf")
         end
+    else
+        core.log.warn("upstream_conf is nil, skipping")
     end
 
-    -- 最后尝试从route的service_name获取
+    -- 步骤4: 尝试从 route 获取
+    core.log.warn("step 4: trying to extract from matched_route")
     if ctx.matched_route and ctx.matched_route.value then
-        core.log.warn("trying from matched_route...")
+        core.log.warn("found matched_route")
         
+        -- 4.1: 尝试从 service_name 获取
         if ctx.matched_route.value.service_name then
             core.log.warn("found service_name in route: ", ctx.matched_route.value.service_name)
             return ctx.matched_route.value.service_name
+        else
+            core.log.warn("no service_name found in route")
         end
         
-        -- 也可以从route的name中提取
+        -- 4.2: 尝试从 name 获取
         if ctx.matched_route.value.name then
-            core.log.warn("trying to extract from route name: ", ctx.matched_route.value.name)
+            core.log.warn("found route name: ", ctx.matched_route.value.name)
             local service = ctx.matched_route.value.name:match("default_([^-]+)")
             if service then
-                core.log.warn("extracted service from route name: ", service)
+                core.log.warn("successfully extracted service from route name: ", service)
                 return service
             else
                 core.log.warn("failed to extract service from route name")
             end
+        else
+            core.log.warn("no name found in route")
         end
+    else
+        core.log.warn("matched_route or its value is nil, skipping")
     end
 
+    core.log.warn("========== get_service_from_ctx end: no service found ==========")
     core.log.error("failed to get service name from all sources")
     return nil
 end
