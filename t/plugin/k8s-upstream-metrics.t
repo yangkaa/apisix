@@ -42,7 +42,7 @@ passed
 --- no_error_log
 [error]
 
-=== TEST 2: setup route without plugin config
+=== TEST 2: setup route with multiple backends
 --- config
     location /t {
         content_by_lua_block {
@@ -51,12 +51,33 @@ passed
                 ngx.HTTP_PUT,
                 [[{
                     "uri": "/hello",
-                    "upstream": {
-                        "type": "roundrobin",
-                        "nodes": {
-                            "127.0.0.1:1980": 1
-                        },
-                        "host": "test-service.test-ns.svc.cluster.local"
+                    "plugins": {
+                        "traffic-split": {
+                            "rules": [
+                                {
+                                    "weighted_upstreams": [
+                                        {
+                                            "upstream": {
+                                                "name": "backend1",
+                                                "type": "roundrobin",
+                                                "nodes": {
+                                                    "backend1.default.svc:5000": 70
+                                                }
+                                            }
+                                        },
+                                        {
+                                            "upstream": {
+                                                "name": "backend2",
+                                                "type": "roundrobin",
+                                                "nodes": {
+                                                    "backend2.default.svc:5000": 30
+                                                }
+                                            }
+                                        }
+                                    ]
+                                }
+                            ]
+                        }
                     }
                 }]]
             )
@@ -78,14 +99,13 @@ passed
 --- request
 GET /hello
 --- more_headers
-Content-Type: application/json
-{"test":"data"}
+Host: grd6e24e-5000-default-14.103.232.255.nip.io
 --- response_body
 hello world
 --- error_log eval
 [
-    qr/apisix_service_traffic_bytes_total.*service="test-service".*type="ingress"/,
-    qr/apisix_service_traffic_bytes_total.*service="test-service".*type="egress"/
+    qr/apisix_service_traffic_bytes_total.*service="grd6e24e".*type="ingress"/,
+    qr/apisix_service_traffic_bytes_total.*service="grd6e24e".*type="egress"/
 ]
 --- no_error_log
 [error]

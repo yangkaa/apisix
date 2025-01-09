@@ -63,21 +63,15 @@ local function get_service_id_from_labels(route)
     return route.value.labels.service_id
 end
 
--- 从upstream_info获取service名称
-local function get_service_from_upstream(ctx)
-    local upstream_info = ctx.upstream_info
-    if not upstream_info then
+-- 从picked_server获取service名称
+local function get_service_from_picked_server(ctx)
+    local server = ctx.picked_server
+    if not server then
         return nil
     end
     
-    -- upstream_info.host 通常格式为: service.namespace.svc.cluster.local
-    local host = upstream_info.host
-    if not host then
-        return nil
-    end
-    
-    -- 解析service名称
-    local service = host:match("^([^.]+)")
+    -- server通常格式为: serviceName.namespace.svc:port
+    local service = server:match("^([^.]+)")
     return service
 end
 
@@ -106,12 +100,12 @@ function _M.log(conf, ctx)
     -- 添加详细的调试日志
     core.log.info("k8s-upstream-metrics processing request")
     core.log.info("host: ", ctx.var.host)
-    core.log.info("upstream_info: ", core.json.encode(ctx.upstream_info))
+    core.log.info("picked_server: ", ctx.picked_server)
     
-    -- 从upstream_info获取实际访问的service信息
-    local service = get_service_from_upstream(ctx)
+    -- 从picked_server获取实际处理请求的service信息
+    local service = get_service_from_picked_server(ctx)
     if not service then
-        core.log.error("failed to get service from upstream info: ", core.json.encode(ctx.upstream_info))
+        core.log.error("no service found in picked_server")
         return
     end
     core.log.info("service: ", service)
@@ -127,6 +121,7 @@ function _M.log(conf, ctx)
     local namespace = route.value and route.value.metadata and route.value.metadata.namespace
     if not namespace then
         core.log.warn("no namespace found in route metadata")
+        namespace = "default"  -- 使用默认namespace
     end
     core.log.info("namespace: ", namespace)
     
