@@ -156,10 +156,18 @@ end
 -- 记录响应头大小
 local function get_headers_size(headers)
     local size = 0
+    -- 计算状态行大小 (HTTP/1.1 200 OK\r\n)
+    size = size + 8 + 1 + 3 + 3 + 2  -- "HTTP/1.1 200 OK\r\n"
+    
+    -- 计算每个响应头的大小
     for k, v in pairs(headers) do
-        size = size + #k + #v + 2  -- 2 for ": "
+        size = size + #k + 2 + #v + 2  -- "key: value\r\n"
     end
-    return size + 2  -- 2 for CRLF
+    
+    -- 最后的空行
+    size = size + 2  -- "\r\n"
+    
+    return size
 end
 
 function _M.header_filter(conf, ctx)
@@ -229,8 +237,9 @@ function _M.log(conf, ctx)
     
     -- 计算请求和响应大小
     local request_size = tonumber(ctx.var.request_length) or 0
-    local response_size = (ctx.upstream_headers_size or 0) + (ctx.var.body_bytes_sent or 0)
+    local response_size = (ctx.upstream_headers_size or 0) + tonumber(ctx.var.body_bytes_sent or 0)
     core.log.info("request_size: ", request_size, ", response_size: ", response_size)
+    core.log.info("headers_size: ", ctx.upstream_headers_size)
     
     -- 更新指标前的最终确认
     core.log.info("updating metrics with:")
