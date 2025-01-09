@@ -22,6 +22,8 @@ local _M = {
     name = plugin_name,
     schema = schema,
     metadata_schema = nil,
+    type = 'auth',
+    run_policy = 'prefer_route',
 }
 
 -- 声明指标
@@ -79,7 +81,11 @@ local function get_service_from_upstream(ctx)
     return service
 end
 
-function _M.check_schema(conf)
+function _M.check_args(conf)
+    -- 允许空配置
+    if not conf then
+        return true
+    end
     return core.schema.check(schema, conf)
 end
 
